@@ -1,0 +1,174 @@
+server:
+  port: 20001
+  max-http-header-size: 80KB
+  tomcat:
+    # 等待队列
+    accept-count: 1000
+    # 最多连接数
+    max-connections: 10000
+    # 最大线程数 1核2G内存，线程数建议值200；4核8G内存， 线程数建议值800
+    threads.max: 800
+    # 最小空闲线程
+    threads.min-spare: 100
+    # 连接超时
+    connection-timeout: 10000
+    uri-encoding: utf-8
+spring:
+  mvc:
+    pathmatch:
+      # 该配置用于兼容swagger2 在java 17 中默认使用的是PATH_PATTERN_PARSER
+      matching-strategy: ant_path_matcher
+  application:
+    name: sharding
+  # 配置多数据源
+  datasource:
+    dynamic:
+      druid:
+        initial-size: 5
+        min-idle: 5
+        maxActive: 100
+        maxWait: 6000
+        timeBetweenEvictionRunsMillis: 60000
+        minEvictableIdleTimeMillis: 300000
+        validationQuery: SELECT 1 FROM DUAL
+        testWhileIdle: true
+        testOnBorrow: false
+        testOnReturn: false
+        poolPreparedStatements: true
+        maxPoolPreparedStatementPerConnectionSize: 20
+        # 建议生产环境不开启，影响性能
+        filters: stat,wall
+      primary: master
+      strict: false
+      datasource:
+        master:
+          driver-class-name: com.mysql.cj.jdbc.Driver
+          url: jdbc:mysql://xxx.xxx.xxx.xxx:3306/test?useUnicode=true&zeroDateTimeBehavior=CONVERT_TO_NULL&allowMultiQueries=true&serverTimezone=PRC&useSSL=false
+          username: xxxx
+          password: xxxx
+        slave:
+          driver-class-name: com.mysql.cj.jdbc.Driver
+          url: jdbc:mysql://xxx.xxx.xxx.xxx:3306/test?useUnicode=true&zeroDateTimeBehavior=CONVERT_TO_NULL&allowMultiQueries=true&serverTimezone=PRC&useSSL=false
+          username: xxxx
+          password: xxxx
+    # 建议生产环境不开启，影响性能
+    druid:
+      web-stat-filter:
+        #是否启用StatFilter默认值false
+        enabled: true
+        # 拦截所有的
+        url-pattern: /*
+        # 排除一些不必要的url，比如*:js,/jslib/*等等:
+        exclusions: "*.js,*.gif,*.jpg,*.png,*.css,*.ico,/druid/*"
+        # 关闭和开启session 统计功能 默认关闭
+        #  session-stat-enable: true
+        # sessionStatMaxCount是1000个
+        #  session-stat-max-count: 1000
+        # 配置principalSessionName，使得druid能够知道当前的session的用户是谁
+        #  principal-session-name:
+        # StatViewServlet配置，说明请参考Druid Wiki，配置_StatViewServlet配置
+      stat-view-servlet:
+        # 是否启用StatViewServlet默认值true
+        enabled: true
+        url-pattern: /druid/*
+        # 界面上有一个重置功能 执行这个操作之后，会导致所有计数器清零，重新计数 建议false
+        reset-enable: false
+        # 登录的后台的用户名,密码
+        login-username: admin
+        login-password: admin
+        allow:
+      # 配置需要 druid 监控需要监控spring包路径
+      aop-patterns: com.demo.sharding.*
+  # 配置shardingsphere 数据源 配置可参考官网 https://shardingsphere.apache.org/document/5.1.2/cn/user-manual/shardingsphere-jdbc/builtin-algorithm/sharding/
+  shardingsphere:
+    datasource:
+      names: master,slave
+      master:
+        type: com.alibaba.druid.pool.DruidDataSource
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        url: jdbc:mysql://xxx.xxx.xxx.xxx:3306/test?useUnicode=true&zeroDateTimeBehavior=CONVERT_TO_NULL&allowMultiQueries=true&serverTimezone=PRC&useSSL=false
+        username: xxxx
+        password: xxxx
+        initial-size: 10
+        min-idle: 10
+        maxActive: 200
+        maxWait: 6000
+        timeBetweenEvictionRunsMillis: 60000
+        minEvictableIdleTimeMillis: 300000
+        validationQuery: SELECT 1 FROM DUAL
+        testWhileIdle: true
+        testOnBorrow: false
+        testOnReturn: false
+        poolPreparedStatements: true
+        maxPoolPreparedStatementPerConnectionSize: 20
+        # 建议生产环境不开启，影响性能
+        filters: stat,wall,log4j
+      slave:
+        type: com.alibaba.druid.pool.DruidDataSource
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        url: jdbc:mysql://xxx.xxx.xxx.xxx:3306/test?useUnicode=true&zeroDateTimeBehavior=CONVERT_TO_NULL&allowMultiQueries=true&serverTimezone=PRC&useSSL=false
+        username: xxxx
+        password: xxxx
+        initial-size: 10
+        min-idle: 10
+        maxActive: 200
+        maxWait: 6000
+        timeBetweenEvictionRunsMillis: 60000
+        minEvictableIdleTimeMillis: 300000
+        validationQuery: SELECT 1 FROM DUAL
+        testWhileIdle: true
+        testOnBorrow: false
+        testOnReturn: false
+        poolPreparedStatements: true
+        maxPoolPreparedStatementPerConnectionSize: 20
+        # 建议生产环境不开启，影响性能
+        filters: stat,wall,log4j
+    rules:
+      sharding:
+        tables:
+          test:
+            actual-data-nodes: master.test_$->{0..1}
+            table-strategy:
+              standard:
+                sharding-column: id
+                sharding-algorithm-name: test_inline
+            key-generate-strategy:
+              column: id
+              key-generator-name: test_snowflake
+        key-generators:
+          # key生成采用雪花算法
+          test_snowflake:
+            type: SNOWFLAKE
+            props:
+              max-vibration-offset: 1024
+        sharding-algorithms:
+          test_inline:
+            type: INLINE
+            props:
+              algorithm-expression: test_$->{id % 2}
+      # 配置读写分离
+      readwrite-splitting:
+        data-sources:
+          master: # 主库名称
+            type: Static
+            load-balancer-name: test_round_robin
+            props:
+              write-data-source-name: master
+              read-data-source-names: slave
+        load-balancers:
+          test_round_robin:
+            type: ROUND_ROBIN
+    props:
+      sql-show: true
+
+logging:
+  level:
+    root: DEBUG
+    org.springframework.cloud.gateway: INFO
+    org.springframework.http.server.reactive: DEBUG
+    org.springframework.web.reactive: DEBUG
+    reactor.ipc.netty: DEBUG
+    reactor.netty: DEBUG
+    org.apache: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS,GMT+8} [%thread] [%X{traceId}] %-5level %logger{100}.%M %L - %msg %ex%n"
